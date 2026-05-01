@@ -1,0 +1,20 @@
+{
+  "name": "@global-notes/cli",
+  "version": "0.1.0",
+  "description": "Capture notes from the terminal instantly",
+  "bin": {
+    "gn": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@global-notes/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5"
+  }
+}
