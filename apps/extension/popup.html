@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Global Notes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 400px;
+      min-height: 200px;
+      padding: 16px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 13px;
+      background: #fafafa;
+      color: #111;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #111; color: #eee; }
+      textarea { background: #1a1a1a; color: #eee; border-color: #333; }
+      button#save { background: #eee; color: #111; }
+      #status { color: #aaa; }
+    }
+    h1 { font-size: 13px; font-weight: 600; margin-bottom: 10px; opacity: 0.6; }
+    textarea {
+      width: 100%;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 100px;
+      outline: none;
+      line-height: 1.5;
+    }
+    textarea:focus { border-color: #999; }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      gap: 8px;
+    }
+    #status { font-size: 11px; opacity: 0.5; flex: 1; }
+    button#save {
+      background: #111;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 6px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button#save:disabled { opacity: 0.4; cursor: default; }
+    #not-configured {
+      padding: 20px;
+      text-align: center;
+      line-height: 1.6;
+      opacity: 0.7;
+    }
+    #not-configured a { color: inherit; text-decoration: underline; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="not-configured" style="display:none">
+    API key not set.<br>
+    <a id="open-options">Open settings</a> to add your key.
+  </div>
+
+  <div id="main">
+    <h1>global-notes</h1>
+    <textarea id="content" placeholder="Add a note…" rows="4"></textarea>
+    <div class="row">
+      <span id="status"></span>
+      <button id="save">Save  ⌘↵</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

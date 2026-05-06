@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Global Notes — Settings</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; max-width: 480px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 18px; margin-bottom: 24px; }
+    label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; opacity: 0.6; }
+    input { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+    button { background: #111; color: #fff; border: none; border-radius: 8px; padding: 8px 20px; cursor: pointer; font-size: 13px; }
+    #saved { margin-top: 12px; font-size: 12px; color: green; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Global Notes — Settings</h1>
+
+  <label for="apiKey">API Key</label>
+  <input type="password" id="apiKey" placeholder="gn_…" autocomplete="off">
+
+  <label for="serverUrl">Server URL</label>
+  <input type="url" id="serverUrl" placeholder="https://global-notes.vercel.app">
+
+  <button id="save">Save</button>
+  <p id="saved">Settings saved!</p>
+
+  <script src="options.js"></script>
+</body>
+</html>
