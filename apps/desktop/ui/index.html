@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Global Notes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 600px;
+      height: 80px;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 10px;
+    }
+
+    textarea {
+      flex: 1;
+      height: 56px;
+      border-radius: 14px;
+      border: none;
+      outline: none;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      resize: none;
+      line-height: 1.4;
+      -webkit-app-region: no-drag;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      textarea {
+        background: rgba(30, 30, 30, 0.95);
+        color: #eee;
+      }
+      textarea::placeholder { color: #666; }
+    }
+
+    @media (prefers-color-scheme: light) {
+      textarea {
+        background: rgba(255, 255, 255, 0.97);
+        color: #111;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      }
+      textarea::placeholder { color: #aaa; }
+    }
+
+    #status {
+      font-size: 11px;
+      color: #888;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <textarea id="note" placeholder="Capture a note… Enter to save, Esc to dismiss" rows="2"></textarea>
+  <span id="status"></span>
+
+  <script>
+    const { invoke } = window.__TAURI__ ?? {}
+    const textarea   = document.getElementById('note')
+    const status     = document.getElementById('status')
+
+    // Focus on show
+    window.addEventListener('focus', () => {
+      textarea.value = ''
+      status.textContent = ''
+      textarea.focus()
+    })
+
+    textarea.focus()
+
+    const CONFIG_KEY = 'gn_config'
+
+    function getConfig() {
+      try { return JSON.parse(localStorage.getItem(CONFIG_KEY) ?? '{}') }
+      catch { return {} }
+    }
+
+    async function save() {
+      const content = textarea.value.trim()
+      if (!content) return
+
+      const cfg = getConfig()
+      if (!cfg.apiKey || !cfg.serverUrl) {
+        status.textContent = 'Set API key in settings'
+        return
+      }
+
+      status.textContent = 'Saving…'
+      textarea.disabled = true
+
+      try {
+        const res = await fetch(`${cfg.serverUrl}/api/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${cfg.apiKey}`,
+          },
+          body: JSON.stringify({ content, source: 'desktop' }),
+        })
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+        status.textContent = 'Saved!'
+        textarea.value = ''
+        setTimeout(hideWindow, 500)
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`
+        textarea.disabled = false
+      }
+    }
+
+    function hideWindow() {
+      textarea.value = ''
+      status.textContent = ''
+      textarea.disabled = false
+      // Signal Tauri to hide the window
+      if (window.__TAURI__) {
+        window.__TAURI__.window.appWindow.hide()
+      }
+    }
+
+    textarea.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        save()
+      }
+      if (e.key === 'Escape') {
+        hideWindow()
+      }
+    })
+  </script>
+</body>
+</html>

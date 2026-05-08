@@ -1,0 +1,47 @@
+{
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "../ui",
+    "distDir": "../ui"
+  },
+  "package": {
+    "productName": "Global Notes",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "globalShortcut": { "all": true },
+      "systemTray": { "all": true },
+      "window": { "all": true },
+      "http": { "all": true }
+    },
+    "bundle": {
+      "active": true,
+      "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+      "identifier": "ai.mozark.global-notes",
+      "targets": "all"
+    },
+    "security": { "csp": null },
+    "systemTray": {
+      "iconPath": "icons/32x32.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false
+    },
+    "windows": [
+      {
+        "title": "Global Notes",
+        "label": "capture",
+        "width": 600,
+        "height": 80,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "center": true,
+        "skipTaskbar": true,
+        "transparent": true
+      }
+    ]
+  }
+}
