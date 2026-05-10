@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { createNote, listNotes, searchNotes } from '@/lib/notes'
+import { processNote } from '@/lib/ai/pipeline'
 import { CreateNoteSchema, ListNotesSchema, SearchNotesSchema } from '@global-notes/shared'
 
 export async function POST(req: NextRequest) {
@@ -11,6 +13,10 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const note = await createNote(parsed.data)
+
+  // AI processing fires after the response is sent — never blocks note creation
+  after(() => processNote(note.id, note.content))
+
   return NextResponse.json(note, { status: 201 })
 }
 

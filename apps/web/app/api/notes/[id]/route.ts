@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { getNote, updateNote, deleteNote } from '@/lib/notes'
+import { processNote } from '@/lib/ai/pipeline'
 import { UpdateNoteSchema } from '@global-notes/shared'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +24,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const note = await updateNote(id, parsed.data)
   if (!note) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Re-process AI only when content actually changed
+  if (parsed.data.content !== undefined) {
+    after(() => processNote(note.id, note.content))
+  }
+
   return NextResponse.json(note)
 }
 

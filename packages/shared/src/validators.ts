@@ -15,11 +15,15 @@ export const UpdateNoteSchema = z.object({
 })
 
 export const ListNotesSchema = z.object({
-  page:    z.coerce.number().int().positive().default(1),
-  per_page: z.coerce.number().int().min(1).max(100).default(25),
-  tag:     z.string().optional(),
-  source:  NoteSourceSchema.optional(),
-  pinned:  z.coerce.boolean().optional(),
+  page:        z.coerce.number().int().positive().default(1),
+  per_page:    z.coerce.number().int().min(1).max(100).default(25),
+  tag:         z.string().optional(),
+  source:      NoteSourceSchema.optional(),
+  pinned:      z.coerce.boolean().optional(),
+  // AI filters
+  project:     z.string().optional(),
+  note_type:   z.string().optional(),
+  min_urgency: z.coerce.number().min(0).max(1).optional(),
 })
 
 export const SearchNotesSchema = z.object({

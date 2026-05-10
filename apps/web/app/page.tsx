@@ -7,6 +7,7 @@ import { NoteList } from '@/components/NoteList'
 import { SearchBar } from '@/components/SearchBar'
 import { TagFilter } from '@/components/TagFilter'
 import { SettingsPanel } from '@/components/SettingsPanel'
+import { MorningView } from '@/components/MorningView'
 import type { Note, Tag, PaginatedNotes } from '@global-notes/shared'
 
 const PER_PAGE = 25
@@ -15,6 +16,8 @@ export default function Home() {
   const [notes, setNotes] = useState<Note[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [activeProject, setActiveProject] = useState<string | null>(null)
+  const [projects, setProjects] = useState<{ name: string; count: number }[]>([])
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
@@ -28,6 +31,11 @@ export default function Home() {
     if (res.ok) setTags(await res.json())
   }, [])
 
+  const loadProjects = useCallback(async () => {
+    const res = await fetch('/api/projects')
+    if (res.ok) setProjects(await res.json())
+  }, [])
+
   const loadNotes = useCallback(async (reset = false) => {
     setLoading(true)
     const currentPage = reset ? 1 : page
@@ -38,6 +46,7 @@ export default function Home() {
       url = `/api/notes?q=${encodeURIComponent(debouncedSearch.current)}&${params}`
     } else {
       if (activeTag) params.set('tag', activeTag)
+      if (activeProject) params.set('project', activeProject)
       url = `/api/notes?${params}`
     }
 
@@ -49,20 +58,21 @@ export default function Home() {
       if (!reset) setPage(p => p + 1)
     }
     setLoading(false)
-  }, [page, activeTag])
+  }, [page, activeTag, activeProject])
 
   // Initial load
   useEffect(() => {
     loadTags()
-  }, [loadTags])
+    loadProjects()
+  }, [loadTags, loadProjects])
 
-  // Reload when tag or search changes
+  // Reload when tag, project, or search changes
   useEffect(() => {
     debouncedSearch.current = search
     setPage(1)
     loadNotes(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTag, search])
+  }, [activeTag, activeProject, search])
 
   // Debounce search input
   const handleSearchChange = useCallback((v: string) => {
@@ -89,6 +99,13 @@ export default function Home() {
 
   const handleTagClick = (tag: string) => {
     setActiveTag(prev => prev === tag ? null : tag)
+    setActiveProject(null)
+    setSearch('')
+  }
+
+  const handleProjectClick = (project: string) => {
+    setActiveProject(prev => prev === project ? null : project)
+    setActiveTag(null)
     setSearch('')
   }
 
@@ -141,23 +158,48 @@ export default function Home() {
         {/* Capture input */}
         <NoteInput onCreated={handleCreated} />
 
+        {/* Morning view */}
+        <MorningView />
+
         {/* Tag filter */}
         {!search && (
           <TagFilter
             tags={tags}
             active={activeTag}
-            onSelect={tag => { setActiveTag(tag); setSearch('') }}
+            onSelect={tag => { setActiveTag(tag); setActiveProject(null); setSearch('') }}
             onDelete={handleTagDelete}
           />
+        )}
+
+        {/* Project filter */}
+        {!search && projects.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {projects.map(p => (
+              <button
+                key={p.name}
+                onClick={() => handleProjectClick(p.name)}
+                className={`text-xs px-2.5 py-0.5 rounded-full border transition ${
+                  activeProject === p.name
+                    ? 'bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900 border-neutral-800 dark:border-neutral-200'
+                    : 'border-neutral-200 dark:border-neutral-800 text-neutral-500 dark:text-neutral-500 hover:border-neutral-400 dark:hover:border-neutral-600'
+                }`}
+              >
+                ◈ {p.name}
+                <span className="ml-1 text-[10px] opacity-60">{p.count}</span>
+              </button>
+            ))}
+          </div>
         )}
 
         {/* Status line */}
         <div className="text-xs text-neutral-400 dark:text-neutral-600">
           {search
             ? `Results for "${search}"`
-            : activeTag
-              ? `#${activeTag}`
-              : 'All notes'}
+            : activeProject
+              ? `◈ ${activeProject}`
+              : activeTag
+                ? `#${activeTag}`
+                : 'All notes'}
         </div>
 
         {/* Notes */}

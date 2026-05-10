@@ -1,14 +1,17 @@
 import { sql } from './db'
 import { extractTagNames, syncNoteTags } from './tags'
-import type { Note, PaginatedNotes } from '@global-notes/shared'
+import type { Note, ExtractedTask, PaginatedNotes } from '@global-notes/shared'
 import type { CreateNoteInput, UpdateNoteInput, ListNotesInput, SearchNotesInput } from '@global-notes/shared'
 
-// Fetch a note row and attach its tags
+// ── Hydration ────────────────────────────────────────────────────────────────
+// Takes raw DB rows and attaches tags, extracted tasks, and related note IDs.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function attachTags(rows: any[]): Promise<Note[]> {
+async function hydrate(rows: any[]): Promise<Note[]> {
   if (rows.length === 0) return []
 
   const ids = rows.map(r => r.id as string)
+
+  // Batch-fetch tags
   const tagRows = await sql`
     SELECT nt.note_id, t.name
     FROM note_tags nt
@@ -16,51 +19,93 @@ async function attachTags(rows: any[]): Promise<Note[]> {
     WHERE nt.note_id = ANY(${ids}::uuid[])
     ORDER BY t.name
   `
-
   const tagMap: Record<string, string[]> = {}
-  for (const row of tagRows as { note_id: string; name: string }[]) {
-    if (!tagMap[row.note_id]) tagMap[row.note_id] = []
-    tagMap[row.note_id].push(row.name)
+  for (const r of tagRows as { note_id: string; name: string }[]) {
+    if (!tagMap[r.note_id]) tagMap[r.note_id] = []
+    tagMap[r.note_id].push(r.name)
+  }
+
+  // Batch-fetch extracted tasks
+  const taskRows = await sql`
+    SELECT * FROM extracted_tasks
+    WHERE note_id = ANY(${ids}::uuid[])
+    ORDER BY created_at ASC
+  `
+  const taskMap: Record<string, ExtractedTask[]> = {}
+  for (const r of taskRows as any[]) {
+    if (!taskMap[r.note_id]) taskMap[r.note_id] = []
+    taskMap[r.note_id].push({
+      id:         r.id as string,
+      note_id:    r.note_id as string,
+      task_text:  r.task_text as string,
+      completed:  r.completed as boolean,
+      due_date:   r.due_date as string | null,
+      created_at: (r.created_at as Date).toISOString(),
+    })
+  }
+
+  // Batch-fetch related note IDs
+  const relatedRows = await sql`
+    SELECT note_id, related_note_id
+    FROM related_notes
+    WHERE note_id = ANY(${ids}::uuid[])
+    ORDER BY similarity_score DESC
+  `
+  const relatedMap: Record<string, string[]> = {}
+  for (const r of relatedRows as { note_id: string; related_note_id: string }[]) {
+    if (!relatedMap[r.note_id]) relatedMap[r.note_id] = []
+    relatedMap[r.note_id].push(r.related_note_id)
   }
 
   return rows.map(r => ({
-    ...(r as Omit<Note, 'tags'>),
-    created_at: (r.created_at as Date).toISOString(),
-    updated_at: (r.updated_at as Date).toISOString(),
-    tags: tagMap[r.id as string] ?? [],
+    id:           r.id as string,
+    content:      r.content as string,
+    created_at:   (r.created_at as Date).toISOString(),
+    updated_at:   (r.updated_at as Date).toISOString(),
+    source:       r.source,
+    source_url:   r.source_url ?? null,
+    source_title: r.source_title ?? null,
+    pinned:       r.pinned as boolean,
+    // AI fields
+    ai_category:     r.ai_category ?? null,
+    ai_note_type:    r.ai_note_type ?? null,
+    ai_project:      r.ai_project ?? null,
+    ai_summary:      r.ai_summary ?? null,
+    ai_keywords:     (r.ai_keywords as string[]) ?? [],
+    ai_importance:   r.ai_importance != null ? parseFloat(r.ai_importance) : null,
+    ai_urgency:      r.ai_urgency    != null ? parseFloat(r.ai_urgency)    : null,
+    ai_confidence:   r.ai_confidence != null ? parseFloat(r.ai_confidence) : null,
+    ai_processed_at: r.ai_processed_at ? (r.ai_processed_at as Date).toISOString() : null,
+    // Relations
+    tags:        tagMap[r.id as string]     ?? [],
+    tasks:       taskMap[r.id as string]    ?? [],
+    related_ids: relatedMap[r.id as string] ?? [],
   }))
 }
 
+// ── Public API ────────────────────────────────────────────────────────────────
+
 export async function createNote(input: CreateNoteInput): Promise<Note> {
   const { content, source, source_url, source_title } = input
-
   const rows = await sql`
     INSERT INTO notes (content, source, source_url, source_title)
     VALUES (${content}, ${source}, ${source_url ?? null}, ${source_title ?? null})
     RETURNING *
   `
-
-  const note = rows[0] as Record<string, unknown>
-  const tagNames = extractTagNames(content)
-  await syncNoteTags(note.id as string, tagNames)
-
-  const [result] = await attachTags([note])
+  const note = rows[0]
+  await syncNoteTags(note.id as string, extractTagNames(content))
+  const [result] = await hydrate([note])
   return result
 }
 
 export async function listNotes(input: ListNotesInput): Promise<PaginatedNotes> {
-  const { page, per_page, tag, source, pinned } = input
+  const { page, per_page, tag, source, pinned, project, note_type, min_urgency } = input
   const offset = (page - 1) * per_page
 
-  // Build dynamic WHERE conditions
-  const conditions: string[] = []
-  if (source) conditions.push(`n.source = '${source}'`)
-  if (pinned !== undefined) conditions.push(`n.pinned = ${pinned}`)
-
+  // Build query with all optional AI filters
+  // Using tagged template approach with dynamic conditions via raw SQL construction
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let rows: any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let countRow: any[]
+  let rows: any[], countRow: any[]
 
   if (tag) {
     rows = await sql`
@@ -69,6 +114,11 @@ export async function listNotes(input: ListNotesInput): Promise<PaginatedNotes> 
       JOIN note_tags nt ON nt.note_id = n.id
       JOIN tags t ON t.id = nt.tag_id
       WHERE t.name = ${tag}
+        ${source      ? sql`AND n.source = ${source}`             : sql``}
+        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
+        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
+        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
+        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
       ORDER BY n.pinned DESC, n.created_at DESC
       LIMIT ${per_page} OFFSET ${offset}
     `
@@ -78,50 +128,39 @@ export async function listNotes(input: ListNotesInput): Promise<PaginatedNotes> 
       JOIN note_tags nt ON nt.note_id = n.id
       JOIN tags t ON t.id = nt.tag_id
       WHERE t.name = ${tag}
-    `
-  } else if (source && pinned !== undefined) {
-    rows = await sql`
-      SELECT n.*
-      FROM notes n
-      WHERE n.source = ${source} AND n.pinned = ${pinned}
-      ORDER BY n.pinned DESC, n.created_at DESC
-      LIMIT ${per_page} OFFSET ${offset}
-    `
-    countRow = await sql`
-      SELECT COUNT(*)::text AS count FROM notes WHERE source = ${source} AND pinned = ${pinned}
-    `
-  } else if (source) {
-    rows = await sql`
-      SELECT n.* FROM notes n WHERE n.source = ${source}
-      ORDER BY n.pinned DESC, n.created_at DESC
-      LIMIT ${per_page} OFFSET ${offset}
-    `
-    countRow = await sql`
-      SELECT COUNT(*)::text AS count FROM notes WHERE source = ${source}
-    `
-  } else if (pinned !== undefined) {
-    rows = await sql`
-      SELECT n.* FROM notes n WHERE n.pinned = ${pinned}
-      ORDER BY n.pinned DESC, n.created_at DESC
-      LIMIT ${per_page} OFFSET ${offset}
-    `
-    countRow = await sql`
-      SELECT COUNT(*)::text AS count FROM notes WHERE pinned = ${pinned}
+        ${source      ? sql`AND n.source = ${source}`             : sql``}
+        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
+        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
+        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
+        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
     `
   } else {
     rows = await sql`
-      SELECT n.* FROM notes n
+      SELECT n.*
+      FROM notes n
+      WHERE TRUE
+        ${source      ? sql`AND n.source = ${source}`             : sql``}
+        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
+        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
+        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
+        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
       ORDER BY n.pinned DESC, n.created_at DESC
       LIMIT ${per_page} OFFSET ${offset}
     `
     countRow = await sql`
-      SELECT COUNT(*)::text AS count FROM notes
+      SELECT COUNT(*)::text AS count
+      FROM notes n
+      WHERE TRUE
+        ${source      ? sql`AND n.source = ${source}`             : sql``}
+        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
+        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
+        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
+        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
     `
   }
 
   const total = parseInt(countRow[0].count, 10)
-  const notes = await attachTags(rows)
-
+  const notes = await hydrate(rows)
   return { notes, total, page, per_page, has_more: offset + notes.length < total }
 }
 
@@ -136,23 +175,20 @@ export async function searchNotes(input: SearchNotesInput): Promise<PaginatedNot
     ORDER BY rank DESC, n.created_at DESC
     LIMIT ${per_page} OFFSET ${offset}
   `
-
   const countRow = await sql`
-    SELECT COUNT(*)::text AS count
-    FROM notes
+    SELECT COUNT(*)::text AS count FROM notes
     WHERE search_vec @@ plainto_tsquery('english', ${q})
   `
 
   const total = parseInt(countRow[0].count, 10)
-  const notes = await attachTags(rows)
-
+  const notes = await hydrate(rows)
   return { notes, total, page, per_page, has_more: offset + notes.length < total }
 }
 
 export async function getNote(id: string): Promise<Note | null> {
   const rows = await sql`SELECT * FROM notes WHERE id = ${id}`
   if (rows.length === 0) return null
-  const [note] = await attachTags([rows[0] as Record<string, unknown>])
+  const [note] = await hydrate([rows[0]])
   return note
 }
 
@@ -170,11 +206,10 @@ export async function updateNote(id: string, input: UpdateNoteInput): Promise<No
   `
 
   if (input.content !== undefined) {
-    const tagNames = extractTagNames(content)
-    await syncNoteTags(id, tagNames)
+    await syncNoteTags(id, extractTagNames(content))
   }
 
-  const [note] = await attachTags([rows[0] as Record<string, unknown>])
+  const [note] = await hydrate([rows[0]])
   return note
 }
 
@@ -185,5 +220,5 @@ export async function deleteNote(id: string): Promise<boolean> {
 
 export async function getAllNotes(): Promise<Note[]> {
   const rows = await sql`SELECT * FROM notes ORDER BY created_at DESC`
-  return attachTags(rows as Record<string, unknown>[])
+  return hydrate(rows)
 }

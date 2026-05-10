@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import type { Note } from '@global-notes/shared'
+import { AiMeta } from './AiMeta'
+import { ExtractedTasks } from './ExtractedTasks'
+import { RelatedNotes } from './RelatedNotes'
 
 const SOURCE_LABELS: Record<string, string> = {
   web: 'web',
@@ -30,13 +33,19 @@ interface Props {
   onDelete: (id: string) => void
   onUpdate: (note: Note) => void
   onTagClick: (tag: string) => void
+  onNoteClick?: (note: Note) => void
 }
 
-export function NoteCard({ note, onDelete, onUpdate, onTagClick }: Props) {
+export function NoteCard({ note, onDelete, onUpdate, onTagClick, onNoteClick }: Props) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(note.content)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [tasks, setTasks] = useState(note.tasks ?? [])
+
+  const handleTaskToggled = (taskId: string, completed: boolean) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed } : t))
+  }
 
   const saveEdit = async () => {
     if (!editValue.trim() || saving) return
@@ -93,6 +102,13 @@ export function NoteCard({ note, onDelete, onUpdate, onTagClick }: Props) {
         {note.pinned && <span title="Pinned">📌</span>}
       </div>
 
+      {/* AI metadata */}
+      {note.ai_processed_at && (
+        <div className="mb-2">
+          <AiMeta note={note} />
+        </div>
+      )}
+
       {/* Content */}
       {editing ? (
         <div>
@@ -122,6 +138,13 @@ export function NoteCard({ note, onDelete, onUpdate, onTagClick }: Props) {
         </p>
       )}
 
+      {/* AI summary */}
+      {note.ai_summary && !editing && (
+        <p className="mt-2 text-xs italic text-neutral-400 dark:text-neutral-600 leading-relaxed">
+          {note.ai_summary}
+        </p>
+      )}
+
       {/* Tags */}
       {note.tags.length > 0 && !editing && (
         <div className="flex flex-wrap gap-1.5 mt-3">
@@ -135,6 +158,16 @@ export function NoteCard({ note, onDelete, onUpdate, onTagClick }: Props) {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Extracted tasks */}
+      {!editing && (
+        <ExtractedTasks tasks={tasks} onTaskToggled={handleTaskToggled} />
+      )}
+
+      {/* Related notes */}
+      {!editing && (note.related_ids ?? []).length > 0 && (
+        <RelatedNotes relatedIds={note.related_ids ?? []} onNoteClick={onNoteClick} />
       )}
 
       {/* Actions — appear on hover */}

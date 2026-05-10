@@ -12,9 +12,10 @@ interface Props {
   onDelete: (id: string) => void
   onUpdate: (note: Note) => void
   onTagClick: (tag: string) => void
+  onNoteClick?: (note: Note) => void
 }
 
-export function NoteList({ notes, loading, hasMore, onLoadMore, onDelete, onUpdate, onTagClick }: Props) {
+export function NoteList({ notes, loading, hasMore, onLoadMore, onDelete, onUpdate, onTagClick, onNoteClick }: Props) {
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   // IntersectionObserver for infinite scroll
@@ -46,6 +47,7 @@ export function NoteList({ notes, loading, hasMore, onLoadMore, onDelete, onUpda
           onDelete={onDelete}
           onUpdate={onUpdate}
           onTagClick={onTagClick}
+          onNoteClick={onNoteClick}
         />
       ))}
 
