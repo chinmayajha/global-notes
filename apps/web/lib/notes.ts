@@ -102,23 +102,30 @@ export async function listNotes(input: ListNotesInput): Promise<PaginatedNotes> 
   const { page, per_page, tag, source, pinned, project, note_type, min_urgency } = input
   const offset = (page - 1) * per_page
 
-  // Build query with all optional AI filters
-  // Using tagged template approach with dynamic conditions via raw SQL construction
+  // Nullable params — Neon sql tag doesn't support nested sql fragments,
+  // so we use IS NULL guards to make every filter optional in a single query.
+  const tagVal       = tag        ?? null
+  const sourceVal    = source     ?? null
+  const pinnedVal    = pinned     !== undefined ? pinned : null
+  const projectVal   = project    ?? null
+  const noteTypeVal  = note_type  ?? null
+  const urgencyVal   = min_urgency !== undefined ? min_urgency : null
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rows: any[], countRow: any[]
 
-  if (tag) {
+  if (tagVal !== null) {
     rows = await sql`
       SELECT DISTINCT n.*
       FROM notes n
       JOIN note_tags nt ON nt.note_id = n.id
       JOIN tags t ON t.id = nt.tag_id
-      WHERE t.name = ${tag}
-        ${source      ? sql`AND n.source = ${source}`             : sql``}
-        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
-        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
-        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
-        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
+      WHERE t.name = ${tagVal}
+        AND (${sourceVal}::text    IS NULL OR n.source       = ${sourceVal})
+        AND (${pinnedVal}::boolean IS NULL OR n.pinned       = ${pinnedVal})
+        AND (${projectVal}::text   IS NULL OR n.ai_project   = ${projectVal})
+        AND (${noteTypeVal}::text  IS NULL OR n.ai_note_type = ${noteTypeVal})
+        AND (${urgencyVal}::numeric IS NULL OR n.ai_urgency  >= ${urgencyVal})
       ORDER BY n.pinned DESC, n.created_at DESC
       LIMIT ${per_page} OFFSET ${offset}
     `
@@ -127,23 +134,23 @@ export async function listNotes(input: ListNotesInput): Promise<PaginatedNotes> 
       FROM notes n
       JOIN note_tags nt ON nt.note_id = n.id
       JOIN tags t ON t.id = nt.tag_id
-      WHERE t.name = ${tag}
-        ${source      ? sql`AND n.source = ${source}`             : sql``}
-        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
-        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
-        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
-        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
+      WHERE t.name = ${tagVal}
+        AND (${sourceVal}::text    IS NULL OR n.source       = ${sourceVal})
+        AND (${pinnedVal}::boolean IS NULL OR n.pinned       = ${pinnedVal})
+        AND (${projectVal}::text   IS NULL OR n.ai_project   = ${projectVal})
+        AND (${noteTypeVal}::text  IS NULL OR n.ai_note_type = ${noteTypeVal})
+        AND (${urgencyVal}::numeric IS NULL OR n.ai_urgency  >= ${urgencyVal})
     `
   } else {
     rows = await sql`
       SELECT n.*
       FROM notes n
       WHERE TRUE
-        ${source      ? sql`AND n.source = ${source}`             : sql``}
-        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
-        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
-        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
-        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
+        AND (${sourceVal}::text    IS NULL OR n.source       = ${sourceVal})
+        AND (${pinnedVal}::boolean IS NULL OR n.pinned       = ${pinnedVal})
+        AND (${projectVal}::text   IS NULL OR n.ai_project   = ${projectVal})
+        AND (${noteTypeVal}::text  IS NULL OR n.ai_note_type = ${noteTypeVal})
+        AND (${urgencyVal}::numeric IS NULL OR n.ai_urgency  >= ${urgencyVal})
       ORDER BY n.pinned DESC, n.created_at DESC
       LIMIT ${per_page} OFFSET ${offset}
     `
@@ -151,11 +158,11 @@ export async function listNotes(input: ListNotesInput): Promise<PaginatedNotes> 
       SELECT COUNT(*)::text AS count
       FROM notes n
       WHERE TRUE
-        ${source      ? sql`AND n.source = ${source}`             : sql``}
-        ${pinned      !== undefined ? sql`AND n.pinned = ${pinned}` : sql``}
-        ${project     ? sql`AND n.ai_project = ${project}`        : sql``}
-        ${note_type   ? sql`AND n.ai_note_type = ${note_type}`    : sql``}
-        ${min_urgency !== undefined ? sql`AND n.ai_urgency >= ${min_urgency}` : sql``}
+        AND (${sourceVal}::text    IS NULL OR n.source       = ${sourceVal})
+        AND (${pinnedVal}::boolean IS NULL OR n.pinned       = ${pinnedVal})
+        AND (${projectVal}::text   IS NULL OR n.ai_project   = ${projectVal})
+        AND (${noteTypeVal}::text  IS NULL OR n.ai_note_type = ${noteTypeVal})
+        AND (${urgencyVal}::numeric IS NULL OR n.ai_urgency  >= ${urgencyVal})
     `
   }
 
