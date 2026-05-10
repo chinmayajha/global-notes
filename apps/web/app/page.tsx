@@ -92,6 +92,14 @@ export default function Home() {
     setSearch('')
   }
 
+  const handleTagDelete = async (tagName: string) => {
+    await fetch(`/api/tags/${encodeURIComponent(tagName)}`, { method: 'DELETE' })
+    setTags(prev => prev.filter(t => t.name !== tagName))
+    // Remove the tag from all visible notes' tag lists
+    setNotes(prev => prev.map(n => ({ ...n, tags: n.tags.filter(t => t !== tagName) })))
+    if (activeTag === tagName) setActiveTag(null)
+  }
+
   const handleLoadMore = () => {
     loadNotes(false)
   }
@@ -139,6 +147,7 @@ export default function Home() {
             tags={tags}
             active={activeTag}
             onSelect={tag => { setActiveTag(tag); setSearch('') }}
+            onDelete={handleTagDelete}
           />
         )}
 

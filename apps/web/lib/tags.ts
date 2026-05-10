@@ -11,6 +11,7 @@ export function extractTagNames(content: string): string[] {
 export async function syncNoteTags(noteId: string, tagNames: string[]): Promise<void> {
   if (tagNames.length === 0) {
     await sql`DELETE FROM note_tags WHERE note_id = ${noteId}`
+    await pruneOrphanedTags()
     return
   }
 
@@ -35,4 +36,15 @@ export async function syncNoteTags(noteId: string, tagNames: string[]): Promise<
       ON CONFLICT DO NOTHING
     `
   }
+
+  await pruneOrphanedTags()
+}
+
+async function pruneOrphanedTags(): Promise<void> {
+  await sql`DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM note_tags)`
+}
+
+export async function deleteTag(name: string): Promise<boolean> {
+  const result = await sql`DELETE FROM tags WHERE name = ${name} RETURNING id`
+  return result.length > 0
 }
